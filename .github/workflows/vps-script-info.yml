@@ -1,0 +1,33 @@
+name: VPS Script Info
+
+on:
+  workflow_dispatch:
+
+jobs:
+  script-info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect script and service info via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "### Running services"
+            systemctl list-units --type=service --state=running --no-pager
+            echo "### Top processes by CPU and Memory"
+            ps -eo pid,user,%cpu,%mem,command --sort=-%mem | head -n 20
+            echo "### Docker containers"
+            docker ps -a || true
+            echo "### Script files in home directories"
+            find ~ -maxdepth 3 -type f -name '*.sh' -print || true
+            for f in $(find ~ -maxdepth 3 -type f -name '*.sh'); do
+              echo "--- $f ---"
+              head -n 20 "$f"
+              echo
+            done
+            echo "### NetBird service status"
+            systemctl status netbird.service || true
+            echo "### NetBird version"
+            netbird --version || true
