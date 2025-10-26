@@ -1,30 +1,50 @@
 name: VPS Overview
+
 on:
   workflow_dispatch:
 
 jobs:
   overview:
+    name: Systemdiagnose (VPS Overview)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Collect system overview via SSH
-        uses: appleboy/ssh-action@v0.1.10
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Collect system information
+        run: |
+          echo "===== HOST INFORMATION =====" > system-report.log
+          hostnamectl >> system-report.log || true
+          echo "" >> system-report.log
+
+          echo "===== OS RELEASE =====" >> system-report.log
+          lsb_release -a 2>/dev/null || cat /etc/os-release >> system-report.log
+          echo "" >> system-report.log
+
+          echo "===== KERNEL =====" >> system-report.log
+          uname -a >> system-report.log
+          echo "" >> system-report.log
+
+          echo "===== RUNNING SERVICES =====" >> system-report.log
+          systemctl list-units --type=service --state=running | head -n 40 >> system-report.log
+          echo "" >> system-report.log
+
+          echo "===== NETWORK PORTS =====" >> system-report.log
+          ss -tuln | grep -E "80|443|33073|51820" >> system-report.log || echo "Keine relevanten Ports gefunden" >> system-report.log
+          echo "" >> system-report.log
+
+          echo "===== INSTALLED PACKAGES =====" >> system-report.log
+          dpkg --get-selections | grep -E "netbird|caddy|nginx|postgres|mysql|docker" >> system-report.log || echo "Keine dieser Pakete gefunden" >> system-report.log
+          echo "" >> system-report.log
+
+          echo "===== RESOURCE USAGE =====" >> system-report.log
+          df -h >> system-report.log
+          free -m >> system-report.log
+          echo "" >> system-report.log
+
+      - name: Upload system report
+        uses: actions/upload-artifact@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "### System und Kernel:"
-            uname -a
-            echo "### Distribution:"
-            (lsb_release -a 2>/dev/null) || cat /etc/os-release
-            echo "### Uptime und Speicher:"
-            uptime
-            free -h
-            echo "### Festplattenbelegung:"
-            df -h
-            echo "### Laufende Dienste:"
-            systemctl list-units --type=service --state=running --no-pager
-            echo "### Top-Prozesse:"
-            top -b -n1 | head -n 15
-            echo "### Anzahl installierter Pakete:"
-            dpkg -l | wc -l || true
+          name: vps-system-report
+          path: system-report.log
